@@ -12,9 +12,7 @@ import { HealthController } from './controllers/HealthController';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DIST_DIR = path.resolve(__dirname, '..', 'dist');
+const DIST_DIR = path.resolve(process.cwd(), 'dist');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
