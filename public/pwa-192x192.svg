@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="36" fill="#047857"/>
+  <rect x="24" y="24" width="144" height="144" rx="20" fill="#065f46"/>
+  <circle cx="96" cy="72" r="28" fill="#10b981"/>
+  <path d="M96 52 L96 92 M76 72 L116 72" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <!-- Rupee Symbol -->
+  <text x="96" y="142" font-family="system-ui, sans-serif" font-size="44" font-weight="900" fill="#facc15" text-anchor="middle">₹ खाता</text>
+</svg>
