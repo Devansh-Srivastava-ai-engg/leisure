@@ -3,22 +3,44 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { initDatabase } from './config/database';
 import apiRouter from './routes';
 import { HealthController } from './controllers/HealthController';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DIST_DIR = path.resolve(__dirname, '..', 'dist');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ---------------------------------------------------------------------------
-// Security: Helmet – sets secure HTTP headers (XSS, HSTS, CSP defaults, etc.)
+// Security: Helmet – sets secure HTTP headers with PWA-friendly CSP
 // ---------------------------------------------------------------------------
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https://api.qrserver.com"],
+        connectSrc: ["'self'", "*"],
+        manifestSrc: ["'self'"],
+        workerSrc: ["'self'", "blob:"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // ---------------------------------------------------------------------------
-// Security: CORS – restrict to explicitly permitted origins
+// Security: CORS – restrict to permitted origins or allow same-origin
 // ---------------------------------------------------------------------------
 const DEFAULT_ORIGINS = ['http://localhost:5173', 'http://localhost:4173'];
 const allowedOrigins: string[] = process.env.ALLOWED_ORIGINS
@@ -27,7 +49,13 @@ const allowedOrigins: string[] = process.env.ALLOWED_ORIGINS
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, or same-origin browser requests)
+      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -60,10 +88,24 @@ initDatabase();
 // ---------------------------------------------------------------------------
 app.use('/api', apiRouter);
 
+// Backend Admin / Status Dashboard
+app.get('/dashboard', HealthController.getDashboard);
+
 // ---------------------------------------------------------------------------
-// Root Route: Render MVC Server Dashboard View
+// Static Assets & Single Page Application (SPA) Serving
 // ---------------------------------------------------------------------------
-app.get('/', HealthController.getDashboard);
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      return res.sendFile(path.join(DIST_DIR, 'index.html'));
+    }
+    next();
+  });
+} else {
+  // If dist has not been built yet (e.g. backend-only dev)
+  app.get('/', HealthController.getDashboard);
+}
 
 // ---------------------------------------------------------------------------
 // Global error-handling middleware (must be registered last)

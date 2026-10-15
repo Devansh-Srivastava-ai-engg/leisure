@@ -577,7 +577,8 @@ export async function recordVendorTransaction({
 // ---------------------------------------------------------------------------
 export const BACKEND_URL =
   (typeof window !== 'undefined' && (window as any).__BACKEND_URL__) ||
-  'http://localhost:5000';
+  import.meta.env.VITE_BACKEND_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000' : '');
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
