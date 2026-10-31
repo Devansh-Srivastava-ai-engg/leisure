@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from './store/useAppStore';
+import { useAuthStore } from './store/authStore';
 import { initializeDatabase } from './db/db';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -9,6 +10,7 @@ import { CashDrawerView } from './components/CashDrawerView';
 import { DaySummaryView } from './components/DaySummaryView';
 import { VendorsView } from './components/VendorsView';
 import { VoiceInputModal } from './components/VoiceInputModal';
+import { AuthScreen } from './components/AuthScreen';
 
 export const App: React.FC = () => {
   const {
@@ -18,15 +20,19 @@ export const App: React.FC = () => {
     loadInitialSettings,
   } = useAppStore();
 
+  const { isAuthenticated, isRestoringSession, checkAuth } = useAuthStore();
   const [isDbReady, setIsDbReady] = useState(false);
 
   useEffect(() => {
     async function init() {
       try {
-        await initializeDatabase();
-        await loadInitialSettings();
+        await Promise.all([
+          initializeDatabase(),
+          loadInitialSettings(),
+          checkAuth(),
+        ]);
       } catch (err) {
-        console.warn('Database initialization error:', err);
+        console.warn('Initialization error:', err);
       } finally {
         setIsDbReady(true);
       }
@@ -44,9 +50,9 @@ export const App: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [setIsOnline, loadInitialSettings]);
+  }, [setIsOnline, loadInitialSettings, checkAuth]);
 
-  if (!isDbReady) {
+  if (!isDbReady || isRestoringSession) {
     return (
       <div className="h-screen w-screen bg-stone-50 flex flex-col items-center justify-center text-stone-800">
         <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center font-bold text-xl text-white shadow-xs">
@@ -58,6 +64,11 @@ export const App: React.FC = () => {
         <span className="text-xs text-stone-500 font-medium mt-0.5">लोड हो रहा है...</span>
       </div>
     );
+  }
+
+  // Not authenticated: prompt user with Login & Register screen
+  if (!isAuthenticated) {
+    return <AuthScreen />;
   }
 
   return (

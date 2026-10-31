@@ -56,6 +56,7 @@ interface AppState {
   // App init
   loadInitialSettings: () => Promise<void>;
   updateSettings: (newSettings: Partial<ShopSettings>) => Promise<void>;
+  resetAppState: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -186,5 +187,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.warn('Failed to persist settings:', err);
     }
+  },
+
+  resetAppState: () => {
+    set({
+      activeTab: 'ledger',
+      selectedCustomer: null,
+      isTxModalOpen: false,
+      isVoiceModalOpen: false,
+      cart: [],
+      pendingSyncCount: 0,
+      settings: DEFAULT_SETTINGS,
+    });
   },
 }));

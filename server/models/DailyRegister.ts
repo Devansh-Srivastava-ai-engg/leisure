@@ -17,62 +17,85 @@ export interface DailyRegisterData {
   closed_at?: string | null;
   notes?: string | null;
   updated_at?: string;
+  user_id?: string;
 }
 
 export class DailyRegisterModel {
-  static getToday(): DailyRegisterData {
+  static getToday(userId: string): DailyRegisterData {
     const today = new Date().toISOString().split('T')[0];
-    let register = db.prepare('SELECT * FROM daily_registers WHERE id = ?').get(today) as DailyRegisterData | undefined;
+
+    // Primary key is composite: date + user_id to support multiple users on
+    // the same calendar day. We use `${today}-${userId}` as the row id so
+    // existing single-user rows (id = date) keep working untouched.
+    const rowId = `${today}-${userId}`;
+
+    let register = db
+      .prepare('SELECT * FROM daily_registers WHERE id = ?')
+      .get(rowId) as DailyRegisterData | undefined;
 
     if (!register) {
       const now = new Date().toISOString();
       db.prepare(`
-        INSERT INTO daily_registers (id, date, starting_cash, denominations_json, counted_cash, expected_cash, discrepancy, cash_sales, jama_cash, cash_expenses, upi_sales, udhar_given, is_closed, updated_at)
-        VALUES (?, ?, 2000, null, 2000, 2000, 0, 0, 0, 0, 0, 0, 0, ?)
-      `).run(today, today, now);
+        INSERT INTO daily_registers
+          (id, date, starting_cash, denominations_json, counted_cash, expected_cash,
+           discrepancy, cash_sales, jama_cash, cash_expenses, upi_sales, udhar_given,
+           is_closed, updated_at, user_id)
+        VALUES (?, ?, 2000, null, 2000, 2000, 0, 0, 0, 0, 0, 0, 0, ?, ?)
+      `).run(rowId, today, now, userId);
 
-      register = db.prepare('SELECT * FROM daily_registers WHERE id = ?').get(today) as DailyRegisterData;
+      register = db
+        .prepare('SELECT * FROM daily_registers WHERE id = ?')
+        .get(rowId) as DailyRegisterData;
     }
 
     return register;
   }
 
-  static findAll(limit = 30): DailyRegisterData[] {
+  static findAll(userId: string, limit = 30): DailyRegisterData[] {
     return db
-      .prepare('SELECT * FROM daily_registers ORDER BY date DESC LIMIT ?')
-      .all(limit) as DailyRegisterData[];
+      .prepare(
+        'SELECT * FROM daily_registers WHERE user_id = ? ORDER BY date DESC LIMIT ?',
+      )
+      .all(userId, limit) as DailyRegisterData[];
   }
 
-  static closeToday({
-    countedCash,
-    denominations,
-    notes,
-  }: {
-    countedCash?: number;
-    denominations?: any;
-    notes?: string;
-  }): DailyRegisterData {
+  static closeToday(
+    userId: string,
+    {
+      countedCash,
+      denominations,
+      notes,
+    }: {
+      countedCash?: number;
+      denominations?: any;
+      notes?: string;
+    },
+  ): DailyRegisterData {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const rowId = `${today}-${userId}`;
+    const now   = new Date().toISOString();
 
     db.prepare(`
       UPDATE daily_registers SET
-        is_closed = 1,
-        closed_at = ?,
-        counted_cash = coalesce(?, counted_cash),
+        is_closed        = 1,
+        closed_at        = ?,
+        counted_cash     = coalesce(?, counted_cash),
         denominations_json = coalesce(?, denominations_json),
-        notes = coalesce(?, notes),
-        updated_at = ?
-      WHERE id = ?
+        notes            = coalesce(?, notes),
+        updated_at       = ?
+      WHERE id = ? AND user_id = ?
     `).run(
       now,
       countedCash,
       denominations ? JSON.stringify(denominations) : null,
       notes,
       now,
-      today
+      rowId,
+      userId,
     );
 
-    return db.prepare('SELECT * FROM daily_registers WHERE id = ?').get(today) as DailyRegisterData;
+    return db
+      .prepare('SELECT * FROM daily_registers WHERE id = ? AND user_id = ?')
+      .get(rowId, userId) as DailyRegisterData;
   }
 }

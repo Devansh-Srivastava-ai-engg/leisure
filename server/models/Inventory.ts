@@ -19,68 +19,78 @@ export interface InventoryData {
   color?: string;
   icon?: string;
   updated_at?: string;
+  user_id?: string;
 }
 
 export class InventoryModel {
-  static findAll(): InventoryData[] {
+  static findAll(userId: string): InventoryData[] {
     return db
-      .prepare('SELECT * FROM inventory ORDER BY category ASC, name ASC')
-      .all() as InventoryData[];
+      .prepare('SELECT * FROM inventory WHERE user_id = ? ORDER BY category ASC, name ASC')
+      .all(userId) as InventoryData[];
   }
 
-  static findById(id: string): InventoryData | undefined {
-    return db.prepare('SELECT * FROM inventory WHERE id = ?').get(id) as InventoryData | undefined;
+  static findById(id: string, userId: string): InventoryData | undefined {
+    return db
+      .prepare('SELECT * FROM inventory WHERE id = ? AND user_id = ?')
+      .get(id, userId) as InventoryData | undefined;
   }
 
-  static create(data: Partial<InventoryData>): InventoryData {
-    const id = data.id || `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  static create(data: Partial<InventoryData> & { user_id: string }): InventoryData {
+    const id  = data.id || `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO inventory (id, name, name_hi, category, parent_unit_name, sub_unit_name, loose_unit_name, units_per_parent, units_per_sub, stock_in_loose_units, loose_selling_price, sub_selling_price, parent_cost_price, low_stock_threshold_loose, quick_preset, color, icon, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO inventory
+        (id, name, name_hi, category, parent_unit_name, sub_unit_name, loose_unit_name,
+         units_per_parent, units_per_sub, stock_in_loose_units, loose_selling_price,
+         sub_selling_price, parent_cost_price, low_stock_threshold_loose,
+         quick_preset, color, icon, updated_at, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       data.name,
       data.name_hi || data.name,
-      data.category || 'other',
-      data.parent_unit_name || 'Box',
-      data.sub_unit_name || 'Pack',
-      data.loose_unit_name || 'Piece',
-      data.units_per_parent || 1,
-      data.units_per_sub || 1,
-      data.stock_in_loose_units ?? 0,
-      data.loose_selling_price ?? 0,
-      data.sub_selling_price ?? null,
-      data.parent_cost_price ?? 0,
-      data.low_stock_threshold_loose ?? 10,
+      data.category                              || 'other',
+      data.parent_unit_name                      || 'Box',
+      data.sub_unit_name                         || 'Pack',
+      data.loose_unit_name                       || 'Piece',
+      data.units_per_parent                      || 1,
+      data.units_per_sub                         || 1,
+      data.stock_in_loose_units                  ?? 0,
+      data.loose_selling_price                   ?? 0,
+      data.sub_selling_price                     ?? null,
+      data.parent_cost_price                     ?? 0,
+      data.low_stock_threshold_loose             ?? 10,
       data.quick_preset ? 1 : 0,
       data.color || 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50',
-      data.icon || 'Package',
-      now
+      data.icon  || 'Package',
+      now,
+      data.user_id,
     );
 
-    return this.findById(id)!;
+    return this.findById(id, data.user_id)!;
   }
 
-  static updateStock(id: string, { stockInLooseUnits, deductLooseUnits }: { stockInLooseUnits?: number; deductLooseUnits?: number }): InventoryData | undefined {
+  static updateStock(
+    id: string,
+    userId: string,
+    { stockInLooseUnits, deductLooseUnits }: { stockInLooseUnits?: number; deductLooseUnits?: number },
+  ): InventoryData | undefined {
     const now = new Date().toISOString();
     if (deductLooseUnits !== undefined) {
       db.prepare(`
-        UPDATE inventory SET
-          stock_in_loose_units = max(0, stock_in_loose_units - ?),
-          updated_at = ?
-        WHERE id = ?
-      `).run(deductLooseUnits, now, id);
+        UPDATE inventory
+        SET stock_in_loose_units = max(0, stock_in_loose_units - ?), updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(deductLooseUnits, now, id, userId);
     } else if (stockInLooseUnits !== undefined) {
       db.prepare(`
-        UPDATE inventory SET
-          stock_in_loose_units = ?,
-          updated_at = ?
-        WHERE id = ?
-      `).run(stockInLooseUnits, now, id);
+        UPDATE inventory
+        SET stock_in_loose_units = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(stockInLooseUnits, now, id, userId);
     }
-    return this.findById(id);
+    return this.findById(id, userId);
   }
 
   static count(): number {

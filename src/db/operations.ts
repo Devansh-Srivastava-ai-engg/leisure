@@ -4,6 +4,7 @@ import type {
   Transaction,
   TransactionType,
   InventoryItem,
+  Vendor,
   VendorTransaction,
   DailyRegister,
   Denominations,
@@ -11,6 +12,7 @@ import type {
 } from '../types';
 import { announceTransaction, playSound, triggerHaptic } from '../utils/audio';
 import { useAppStore } from '../store/useAppStore';
+import { apiFetch } from '../services/api';
 
 // ---------------------------------------------------------------------------
 // Result type — every public operation returns this instead of throwing.
@@ -617,9 +619,8 @@ export async function syncOutboxNow(): Promise<{
       return { syncedCount: 0, serverOnline: true };
     }
 
-    const res = await fetch(`${BACKEND_URL}/api/sync`, {
+    const res = await apiFetch('/api/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mutations: pending }),
       signal: AbortSignal.timeout(6000),
     });
@@ -644,6 +645,131 @@ export async function syncOutboxNow(): Promise<{
   } catch (err) {
     console.warn('[Sync Engine] Backend offline or unreachable. Kept safely in local outbox queue:', err);
     return { syncedCount: 0, serverOnline: false };
+  }
+}
+
+/**
+ * Pull cloud changes from the backend for the authenticated user and update Dexie.
+ * Used during login and session initialization to populate user data cleanly.
+ */
+export async function pullFromServer(): Promise<{
+  success: boolean;
+  itemCounts: { customers: number; transactions: number; inventory: number; vendors: number };
+  error?: string;
+}> {
+  try {
+    const res = await apiFetch('/api/sync/pull', { method: 'GET' });
+    if (!res.ok) {
+      throw new Error(`Sync pull failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    const changes = data.changes || {};
+
+    const customers: Customer[] = (changes.customers || []).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone || '',
+      balance: Number(c.balance) || 0,
+      creditLimit: Number(c.credit_limit) ?? 500,
+      isPinned: Boolean(c.is_pinned),
+      avatarColor: c.avatar_color || 'bg-emerald-600',
+      notes: c.notes || '',
+      lastTransactionAt: c.last_transaction_at || c.created_at,
+      createdAt: c.created_at,
+    }));
+
+    const transactions: Transaction[] = (changes.transactions || []).map((t: any) => ({
+      id: t.id,
+      customerId: t.customer_id || undefined,
+      customerName: t.customer_name || undefined,
+      type: t.type,
+      amount: Number(t.amount) || 0,
+      note: t.note || '',
+      items: t.items_json ? JSON.parse(t.items_json) : undefined,
+      paymentMethod: t.payment_method || 'CASH',
+      timestamp: t.timestamp,
+      synced: true,
+    }));
+
+    const inventory: InventoryItem[] = (changes.inventory || []).map((i: any) => ({
+      id: i.id,
+      name: i.name,
+      nameHi: i.name_hi || i.name,
+      category: i.category || 'other',
+      parentUnitName: i.parent_unit_name || 'Box',
+      subUnitName: i.sub_unit_name || 'Pack',
+      looseUnitName: i.loose_unit_name || 'Piece',
+      unitsPerParent: Number(i.units_per_parent) || 1,
+      unitsPerSub: Number(i.units_per_sub) || 1,
+      stockInLooseUnits: Number(i.stock_in_loose_units) || 0,
+      looseSellingPrice: Number(i.loose_selling_price) || 0,
+      subSellingPrice: i.sub_selling_price != null ? Number(i.sub_selling_price) : undefined,
+      parentCostPrice: Number(i.parent_cost_price) || 0,
+      lowStockThresholdLoose: Number(i.low_stock_threshold_loose) || 10,
+      quickPreset: Boolean(i.quick_preset),
+      color: i.color || 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50',
+      icon: i.icon || 'Package',
+    }));
+
+    const vendors: Vendor[] = (changes.vendors || []).map((v: any) => ({
+      id: v.id,
+      name: v.name,
+      company: v.company || '',
+      phone: v.phone || '',
+      balanceOwed: Number(v.balance_owed) || 0,
+      lastPaymentAt: v.last_payment_at || v.created_at,
+      createdAt: v.created_at,
+    }));
+
+    const registers: DailyRegister[] = (changes.registers || []).map((r: any) => ({
+      id: r.date,
+      date: r.date,
+      startingCash: Number(r.starting_cash) || 2000,
+      denominations: r.denominations_json
+        ? JSON.parse(r.denominations_json)
+        : { 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, coins: 0 },
+      countedCash: Number(r.counted_cash) || 0,
+      expectedCash: Number(r.expected_cash) || 0,
+      discrepancy: Number(r.discrepancy) || 0,
+      cashSales: Number(r.cash_sales) || 0,
+      jamaCash: Number(r.jama_cash) || 0,
+      cashExpenses: Number(r.cash_expenses) || 0,
+      upiSales: Number(r.upi_sales) || 0,
+      udharGiven: Number(r.udhar_given) || 0,
+      isClosed: Boolean(r.is_closed),
+      closedAt: r.closed_at || undefined,
+      notes: r.notes || undefined,
+    }));
+
+    // Populate Dexie atomically inside a transaction
+    await db.transaction(
+      'rw',
+      [db.customers, db.transactions, db.inventory, db.vendors, db.dailyRegisters],
+      async () => {
+        if (customers.length > 0) await db.customers.bulkPut(customers);
+        if (transactions.length > 0) await db.transactions.bulkPut(transactions);
+        if (inventory.length > 0) await db.inventory.bulkPut(inventory);
+        if (vendors.length > 0) await db.vendors.bulkPut(vendors);
+        if (registers.length > 0) await db.dailyRegisters.bulkPut(registers);
+      }
+    );
+
+    return {
+      success: true,
+      itemCounts: {
+        customers: customers.length,
+        transactions: transactions.length,
+        inventory: inventory.length,
+        vendors: vendors.length,
+      },
+    };
+  } catch (err: any) {
+    console.warn('[Sync Engine] Initial pull failed (offline or server error):', err);
+    return {
+      success: false,
+      itemCounts: { customers: 0, transactions: 0, inventory: 0, vendors: 0 },
+      error: err?.message,
+    };
   }
 }
 

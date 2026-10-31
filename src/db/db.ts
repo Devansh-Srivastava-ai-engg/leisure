@@ -409,28 +409,72 @@ export function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
-// Database initialization function
-export async function initializeDatabase(): Promise<void> {
-  const customerCount = await db.customers.count();
-  if (customerCount === 0) {
-    await db.customers.bulkAdd(SEED_CUSTOMERS);
-  }
+// Database cleanup helper for user logout / account switching
+export async function clearLocalDatabase(): Promise<void> {
+  await Promise.all([
+    db.customers.clear(),
+    db.transactions.clear(),
+    db.inventory.clear(),
+    db.vendors.clear(),
+    db.vendorTransactions.clear(),
+    db.dailyRegisters.clear(),
+    db.syncOutbox.clear(),
+    db.settings.clear(),
+  ]);
+}
 
-  const inventoryCount = await db.inventory.count();
-  if (inventoryCount === 0) {
+// Setup baseline defaults (inventory presets, today's register, settings) for a user account
+export async function setupUserDefaults(ownerName?: string): Promise<void> {
+  // Ensure default inventory presets if empty
+  const invCount = await db.inventory.count();
+  if (invCount === 0) {
     await db.inventory.bulkAdd(SEED_INVENTORY);
   }
 
-  const vendorCount = await db.vendors.count();
-  if (vendorCount === 0) {
-    await db.vendors.bulkAdd(SEED_VENDORS);
+  // Ensure today's register exists
+  const today = getTodayDateString();
+  const existingRegister = await db.dailyRegisters.get(today);
+  if (!existingRegister) {
+    const newRegister: DailyRegister = {
+      id: today,
+      date: today,
+      startingCash: 2000,
+      denominations: {
+        500: 0,
+        200: 0,
+        100: 0,
+        50: 0,
+        20: 0,
+        10: 0,
+        coins: 0,
+      },
+      countedCash: 2000,
+      expectedCash: 2000,
+      discrepancy: 0,
+      cashSales: 0,
+      jamaCash: 0,
+      cashExpenses: 0,
+      upiSales: 0,
+      udharGiven: 0,
+      isClosed: false,
+    };
+    await db.dailyRegisters.put(newRegister);
   }
 
-  const txCount = await db.transactions.count();
-  if (txCount === 0) {
-    await db.transactions.bulkAdd(SEED_TRANSACTIONS);
+  // Ensure settings exist
+  const existingSettings = await db.settings.get('config');
+  if (!existingSettings) {
+    const userSettings: ShopSettings = {
+      ...DEFAULT_SETTINGS,
+      ownerName: ownerName || DEFAULT_SETTINGS.ownerName,
+      shopName: ownerName ? `${ownerName} की दुकान` : DEFAULT_SETTINGS.shopName,
+    };
+    await db.settings.put({ key: 'config', value: userSettings });
   }
+}
 
+// Database initialization function (offline local baseline)
+export async function initializeDatabase(): Promise<void> {
   // Check today's register
   const today = getTodayDateString();
   const existingRegister = await db.dailyRegisters.get(today);
@@ -451,11 +495,11 @@ export async function initializeDatabase(): Promise<void> {
       countedCash: 2000,
       expectedCash: 2000,
       discrepancy: 0,
-      cashSales: 40,
-      jamaCash: 100,
-      cashExpenses: 60,
-      upiSales: 80,
-      udharGiven: 50,
+      cashSales: 0,
+      jamaCash: 0,
+      cashExpenses: 0,
+      upiSales: 0,
+      udharGiven: 0,
       isClosed: false,
     };
     await db.dailyRegisters.put(newRegister);

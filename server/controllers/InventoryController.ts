@@ -1,20 +1,21 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { InventoryModel } from '../models/Inventory';
 import { ResponseView } from '../views/responseView';
+import { type AuthenticatedRequest } from '../middleware/auth';
 
 export class InventoryController {
-  static async getAll(_req: Request, res: Response) {
+  static async getAll(req: AuthenticatedRequest, res: Response) {
     try {
-      const items = InventoryModel.findAll();
+      const items = InventoryModel.findAll(req.userId!);
       return ResponseView.collection(res, items);
     } catch (err) {
       return ResponseView.error(res, err);
     }
   }
 
-  static async getById(req: Request, res: Response) {
+  static async getById(req: AuthenticatedRequest, res: Response) {
     try {
-      const item = InventoryModel.findById(req.params.id);
+      const item = InventoryModel.findById(req.params.id, req.userId!);
       if (!item) {
         return ResponseView.error(res, 'Item not found', 404);
       }
@@ -24,7 +25,7 @@ export class InventoryController {
     }
   }
 
-  static async create(req: Request, res: Response) {
+  static async create(req: AuthenticatedRequest, res: Response) {
     try {
       const {
         name,
@@ -50,6 +51,7 @@ export class InventoryController {
       }
 
       const created = InventoryModel.create({
+        user_id: req.userId!,
         name,
         name_hi: nameHi,
         category,
@@ -74,10 +76,10 @@ export class InventoryController {
     }
   }
 
-  static async updateStock(req: Request, res: Response) {
+  static async updateStock(req: AuthenticatedRequest, res: Response) {
     try {
       const { stockInLooseUnits, deductLooseUnits } = req.body;
-      const updated = InventoryModel.updateStock(req.params.id, {
+      const updated = InventoryModel.updateStock(req.params.id, req.userId!, {
         stockInLooseUnits,
         deductLooseUnits,
       });

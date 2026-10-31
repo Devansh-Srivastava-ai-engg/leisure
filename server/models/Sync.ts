@@ -13,19 +13,19 @@ const UDHAR_TYPES = new Set(['UDHAR', 'UDHAR_GIVEN', 'CREDIT_GIVEN']);
 const JAMA_TYPES = new Set(['JAMA', 'JAMA_RECEIVED', 'PAYMENT_RECEIVED']);
 
 export class SyncModel {
-  static processBatch(mutations: MutationItem[]): { processedCount: number; serverTimestamp: string } {
+  static processBatch(userId: string, mutations: MutationItem[]): { processedCount: number; serverTimestamp: string } {
     const now = new Date().toISOString();
 
     const insertAuditLog = db.prepare(`
-      INSERT INTO sync_audit_log (id, client_mutation_id, entity, action, payload_json, client_timestamp, processed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sync_audit_log (id, client_mutation_id, entity, action, payload_json, client_timestamp, processed_at, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Customer upsert — balance is intentionally omitted from DO UPDATE SET
     // so profile edits never clobber transaction-derived balances.
     const upsertCustomer = db.prepare(`
-      INSERT INTO customers (id, name, phone, balance, credit_limit, is_pinned, avatar_color, notes, last_transaction_at, created_at, updated_at)
-      VALUES (@id, @name, @phone, @balance, @creditLimit, @isPinned, @avatarColor, @notes, @lastTransactionAt, @createdAt, @updatedAt)
+      INSERT INTO customers (id, name, phone, balance, credit_limit, is_pinned, avatar_color, notes, last_transaction_at, created_at, updated_at, user_id)
+      VALUES (@id, @name, @phone, @balance, @creditLimit, @isPinned, @avatarColor, @notes, @lastTransactionAt, @createdAt, @updatedAt, @userId)
       ON CONFLICT(id) DO UPDATE SET
         name = coalesce(excluded.name, customers.name),
         phone = coalesce(excluded.phone, customers.phone),
@@ -35,62 +35,65 @@ export class SyncModel {
         notes = coalesce(excluded.notes, customers.notes),
         last_transaction_at = coalesce(excluded.last_transaction_at, customers.last_transaction_at),
         updated_at = excluded.updated_at
+      WHERE customers.user_id = @userId
     `);
-    const deleteCustomer = db.prepare('DELETE FROM customers WHERE id = ?');
+    const deleteCustomer = db.prepare('DELETE FROM customers WHERE id = ? AND user_id = ?');
 
     // Balance mutation statements
     const incrementCustomerBalance = db.prepare(`
       UPDATE customers 
       SET balance = balance + ?, last_transaction_at = ?, updated_at = ? 
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `);
     const decrementCustomerBalance = db.prepare(`
       UPDATE customers 
       SET balance = balance - ?, last_transaction_at = ?, updated_at = ? 
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `);
 
     // Check existing transaction for idempotency
-    const checkTxExists = db.prepare('SELECT id FROM transactions WHERE id = ?');
+    const checkTxExists = db.prepare('SELECT id FROM transactions WHERE id = ? AND user_id = ?');
 
     // Transaction
     const insertTransaction = db.prepare(`
-      INSERT INTO transactions (id, customer_id, customer_name, type, amount, note, items_json, payment_method, timestamp, created_at)
-      VALUES (@id, @customerId, @customerName, @type, @amount, @note, @itemsJson, @paymentMethod, @timestamp, @createdAt)
+      INSERT INTO transactions (id, customer_id, customer_name, type, amount, note, items_json, payment_method, timestamp, created_at, user_id)
+      VALUES (@id, @customerId, @customerName, @type, @amount, @note, @itemsJson, @paymentMethod, @timestamp, @createdAt, @userId)
     `);
 
     // Inventory
     const upsertInventory = db.prepare(`
-      INSERT INTO inventory (id, name, name_hi, category, parent_unit_name, sub_unit_name, loose_unit_name, units_per_parent, units_per_sub, stock_in_loose_units, loose_selling_price, sub_selling_price, parent_cost_price, low_stock_threshold_loose, quick_preset, color, icon, updated_at)
-      VALUES (@id, @name, @nameHi, @category, @parentUnitName, @subUnitName, @looseUnitName, @unitsPerParent, @unitsPerSub, @stockInLooseUnits, @looseSellingPrice, @subSellingPrice, @parentCostPrice, @lowStockThresholdLoose, @quickPreset, @color, @icon, @updatedAt)
+      INSERT INTO inventory (id, name, name_hi, category, parent_unit_name, sub_unit_name, loose_unit_name, units_per_parent, units_per_sub, stock_in_loose_units, loose_selling_price, sub_selling_price, parent_cost_price, low_stock_threshold_loose, quick_preset, color, icon, updated_at, user_id)
+      VALUES (@id, @name, @nameHi, @category, @parentUnitName, @subUnitName, @looseUnitName, @unitsPerParent, @unitsPerSub, @stockInLooseUnits, @looseSellingPrice, @subSellingPrice, @parentCostPrice, @lowStockThresholdLoose, @quickPreset, @color, @icon, @updatedAt, @userId)
       ON CONFLICT(id) DO UPDATE SET
         stock_in_loose_units = coalesce(excluded.stock_in_loose_units, inventory.stock_in_loose_units),
         loose_selling_price = coalesce(excluded.loose_selling_price, inventory.loose_selling_price),
         sub_selling_price = coalesce(excluded.sub_selling_price, inventory.sub_selling_price),
         parent_cost_price = coalesce(excluded.parent_cost_price, inventory.parent_cost_price),
         updated_at = excluded.updated_at
+      WHERE inventory.user_id = @userId
     `);
 
     // Vendor
     const upsertVendor = db.prepare(`
-      INSERT INTO vendors (id, name, company, phone, balance_owed, last_payment_at, created_at, updated_at)
-      VALUES (@id, @name, @company, @phone, @balanceOwed, @lastPaymentAt, @createdAt, @updatedAt)
+      INSERT INTO vendors (id, name, company, phone, balance_owed, last_payment_at, created_at, updated_at, user_id)
+      VALUES (@id, @name, @company, @phone, @balanceOwed, @lastPaymentAt, @createdAt, @updatedAt, @userId)
       ON CONFLICT(id) DO UPDATE SET
         balance_owed = coalesce(excluded.balance_owed, vendors.balance_owed),
         last_payment_at = coalesce(excluded.last_payment_at, vendors.last_payment_at),
         updated_at = excluded.updated_at
+      WHERE vendors.user_id = @userId
     `);
 
     // Vendor Transaction
     const insertVendorTx = db.prepare(`
-      INSERT OR REPLACE INTO vendor_transactions (id, vendor_id, type, amount, note, timestamp, created_at)
-      VALUES (@id, @vendorId, @type, @amount, @note, @timestamp, @createdAt)
+      INSERT OR REPLACE INTO vendor_transactions (id, vendor_id, type, amount, note, timestamp, created_at, user_id)
+      VALUES (@id, @vendorId, @type, @amount, @note, @timestamp, @createdAt, @userId)
     `);
 
     // Register
     const upsertRegister = db.prepare(`
-      INSERT INTO daily_registers (id, date, starting_cash, denominations_json, counted_cash, expected_cash, discrepancy, cash_sales, jama_cash, cash_expenses, upi_sales, udhar_given, is_closed, closed_at, notes, updated_at)
-      VALUES (@id, @date, @startingCash, @denominationsJson, @countedCash, @expectedCash, @discrepancy, @cashSales, @jamaCash, @cashExpenses, @upiSales, @udharGiven, @isClosed, @closedAt, @notes, @updatedAt)
+      INSERT INTO daily_registers (id, date, starting_cash, denominations_json, counted_cash, expected_cash, discrepancy, cash_sales, jama_cash, cash_expenses, upi_sales, udhar_given, is_closed, closed_at, notes, updated_at, user_id)
+      VALUES (@id, @date, @startingCash, @denominationsJson, @countedCash, @expectedCash, @discrepancy, @cashSales, @jamaCash, @cashExpenses, @upiSales, @udharGiven, @isClosed, @closedAt, @notes, @updatedAt, @userId)
       ON CONFLICT(id) DO UPDATE SET
         counted_cash = excluded.counted_cash,
         expected_cash = excluded.expected_cash,
@@ -105,16 +108,20 @@ export class SyncModel {
         closed_at = excluded.closed_at,
         notes = excluded.notes,
         updated_at = excluded.updated_at
+      WHERE daily_registers.user_id = @userId
     `);
 
     const runBatch = db.transaction((items: MutationItem[]) => {
       let count = 0;
       for (const item of items) {
         const p = item.payload || {};
+        p.user_id = userId;
+        p.userId = userId;
+
         switch (item.entity) {
           case 'customer':
             if (item.action === 'DELETE') {
-              deleteCustomer.run(p.id);
+              deleteCustomer.run(p.id, userId);
             } else {
               upsertCustomer.run({
                 id: p.id,
@@ -128,23 +135,37 @@ export class SyncModel {
                 lastTransactionAt: p.lastTransactionAt || now,
                 createdAt: p.createdAt || now,
                 updatedAt: now,
+                userId,
               });
             }
             break;
 
           case 'transaction': {
             const txId = p.id || `tx-${randomUUID()}`;
-            const exists = checkTxExists.get(txId);
+            const exists = checkTxExists.get(txId, userId);
 
             // Only insert and adjust balance if transaction has not already been synced
             if (!exists) {
               const txType = (p.type || 'CASH_SALE').toUpperCase();
               const txAmount = Number(p.amount) || 0;
 
+              // Enforce customer ownership: customer must exist and belong to this user
+              let validCustomerId: string | null = null;
+              let validCustomerName: string | null = p.customerName || null;
+              if (p.customerId) {
+                const customer = db
+                  .prepare('SELECT id, name FROM customers WHERE id = ? AND user_id = ?')
+                  .get(p.customerId, userId) as { id: string; name: string } | undefined;
+                if (customer) {
+                  validCustomerId = customer.id;
+                  validCustomerName = p.customerName || customer.name;
+                }
+              }
+
               insertTransaction.run({
                 id: txId,
-                customerId: p.customerId || null,
-                customerName: p.customerName || null,
+                customerId: validCustomerId,
+                customerName: validCustomerName,
                 type: txType,
                 amount: txAmount,
                 note: p.note || '',
@@ -152,14 +173,15 @@ export class SyncModel {
                 paymentMethod: p.paymentMethod || 'CASH',
                 timestamp: p.timestamp || now,
                 createdAt: now,
+                userId,
               });
 
-              // Apply the delta balance update to ensure customer ledger stays synchronized
-              if (p.customerId) {
+              // Apply delta balance update only if customer exists and belongs to this user
+              if (validCustomerId) {
                 if (UDHAR_TYPES.has(txType)) {
-                  incrementCustomerBalance.run(txAmount, now, now, p.customerId);
+                  incrementCustomerBalance.run(txAmount, now, now, validCustomerId, userId);
                 } else if (JAMA_TYPES.has(txType)) {
-                  decrementCustomerBalance.run(txAmount, now, now, p.customerId);
+                  decrementCustomerBalance.run(txAmount, now, now, validCustomerId, userId);
                 }
               }
             }
@@ -186,6 +208,7 @@ export class SyncModel {
               color: p.color || '',
               icon: p.icon || 'Package',
               updatedAt: now,
+              userId,
             });
             break;
 
@@ -199,6 +222,7 @@ export class SyncModel {
               lastPaymentAt: p.lastPaymentAt || now,
               createdAt: p.createdAt || now,
               updatedAt: now,
+              userId,
             });
             break;
 
@@ -211,6 +235,7 @@ export class SyncModel {
               note: p.note || '',
               timestamp: p.timestamp || now,
               createdAt: now,
+              userId,
             });
             break;
 
@@ -232,6 +257,7 @@ export class SyncModel {
               closedAt: p.closedAt || null,
               notes: p.notes || '',
               updatedAt: now,
+              userId,
             });
             break;
         }
@@ -243,7 +269,8 @@ export class SyncModel {
           item.action,
           JSON.stringify(p),
           item.createdAt,
-          now
+          now,
+          userId
         );
         count++;
       }
@@ -253,19 +280,19 @@ export class SyncModel {
     const processedCount = runBatch(mutations);
 
     // Self-healing: ensure balances strictly equal transaction ledger deltas
-    SyncModel.reconcileCustomerBalance();
+    SyncModel.reconcileCustomerBalance(userId);
 
     return { processedCount, serverTimestamp: now };
   }
 
-  static pullChanges(since?: string) {
+  static pullChanges(userId: string, since?: string) {
     const sinceClause = since ? since : '1970-01-01T00:00:00.000Z';
 
-    const customers = db.prepare('SELECT * FROM customers WHERE updated_at > ?').all(sinceClause);
-    const transactions = db.prepare('SELECT * FROM transactions WHERE created_at > ?').all(sinceClause);
-    const inventory = db.prepare('SELECT * FROM inventory WHERE updated_at > ?').all(sinceClause);
-    const vendors = db.prepare('SELECT * FROM vendors WHERE updated_at > ?').all(sinceClause);
-    const registers = db.prepare('SELECT * FROM daily_registers WHERE updated_at > ?').all(sinceClause);
+    const customers = db.prepare('SELECT * FROM customers WHERE user_id = ? AND updated_at > ?').all(userId, sinceClause);
+    const transactions = db.prepare('SELECT * FROM transactions WHERE user_id = ? AND created_at > ?').all(userId, sinceClause);
+    const inventory = db.prepare('SELECT * FROM inventory WHERE user_id = ? AND updated_at > ?').all(userId, sinceClause);
+    const vendors = db.prepare('SELECT * FROM vendors WHERE user_id = ? AND updated_at > ?').all(userId, sinceClause);
+    const registers = db.prepare('SELECT * FROM daily_registers WHERE user_id = ? AND updated_at > ?').all(userId, sinceClause);
 
     return {
       serverTimestamp: new Date().toISOString(),
@@ -333,7 +360,7 @@ export class SyncModel {
    * Recomputes customer balance directly from transactions.
    * Safe to call after sync batches or during scheduled reconciliation.
    */
-  static reconcileCustomerBalance(customerId?: string): void {
+  static reconcileCustomerBalance(userId: string, customerId?: string): void {
     const now = new Date().toISOString();
     if (customerId) {
       db.prepare(`
@@ -347,11 +374,11 @@ export class SyncModel {
             END
           ), 0)
           FROM transactions
-          WHERE transactions.customer_id = customers.id
+          WHERE transactions.customer_id = customers.id AND transactions.user_id = ?
         ),
         updated_at = ?
-        WHERE id = ?
-      `).run(now, customerId);
+        WHERE id = ? AND user_id = ?
+      `).run(userId, now, customerId, userId);
     } else {
       db.prepare(`
         UPDATE customers
@@ -364,10 +391,11 @@ export class SyncModel {
             END
           ), 0)
           FROM transactions
-          WHERE transactions.customer_id = customers.id
+          WHERE transactions.customer_id = customers.id AND transactions.user_id = ?
         ),
         updated_at = ?
-      `).run(now);
+        WHERE user_id = ?
+      `).run(userId, now, userId);
     }
   }
 

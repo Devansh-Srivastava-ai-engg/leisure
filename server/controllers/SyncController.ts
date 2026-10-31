@@ -1,12 +1,17 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { SyncModel } from '../models/Sync';
 import { ResponseView } from '../views/responseView';
+import { type AuthenticatedRequest } from '../middleware/auth';
 
 const MAX_MUTATIONS_PER_BATCH = 200;
 
 export class SyncController {
-  static async push(req: Request, res: Response) {
+  static async push(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!req.userId) {
+        return ResponseView.error(res, 'Unauthorized', 401);
+      }
+
       const { mutations } = req.body;
 
       if (!Array.isArray(mutations)) {
@@ -30,15 +35,19 @@ export class SyncController {
         );
       }
 
-      // 2. Validate basic structure of each mutation object
+      // 2. Validate basic structure and force record.user_id = req.userId on every item
       for (let i = 0; i < mutations.length; i++) {
         const item = mutations[i];
         if (!item || typeof item !== 'object') {
           return ResponseView.error(res, `Invalid mutation at index ${i}: must be an object`, 400);
         }
+        if (item.payload && typeof item.payload === 'object') {
+          item.payload.user_id = req.userId;
+          item.payload.userId = req.userId;
+        }
       }
 
-      const result = SyncModel.processBatch(mutations);
+      const result = SyncModel.processBatch(req.userId, mutations);
 
       return res.json({
         success: true,
@@ -50,8 +59,12 @@ export class SyncController {
     }
   }
 
-  static async pull(req: Request, res: Response) {
+  static async pull(req: AuthenticatedRequest, res: Response) {
     try {
+      if (!req.userId) {
+        return ResponseView.error(res, 'Unauthorized', 401);
+      }
+
       const sinceRaw = req.query.since as string | undefined;
       let validSince: string | undefined = undefined;
 
@@ -64,7 +77,7 @@ export class SyncController {
         validSince = parsedDate.toISOString();
       }
 
-      const result = SyncModel.pullChanges(validSince);
+      const result = SyncModel.pullChanges(req.userId!, validSince);
 
       return res.json({
         success: true,

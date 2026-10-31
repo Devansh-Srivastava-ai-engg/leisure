@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { TransactionModel } from '../models/Transaction';
 import { ResponseView } from '../views/responseView';
+import { type AuthenticatedRequest } from '../middleware/auth';
 
 // Allowed Enums
 const ALLOWED_TYPES = new Set(['UDHAR', 'JAMA', 'CREDIT_GIVEN', 'PAYMENT_RECEIVED']);
 const ALLOWED_PAYMENT_METHODS = new Set(['CASH', 'UPI', 'ONLINE']);
 
 export class TransactionController {
-  static async getAll(req: Request, res: Response) {
+  static async getAll(req: AuthenticatedRequest, res: Response) {
     try {
       const { customerId, type, limit, offset } = req.query;
 
@@ -16,6 +17,7 @@ export class TransactionController {
       const parsedOffset = Math.max(Number(offset) || 0, 0);
 
       const transactions = TransactionModel.findAll({
+        userId: req.userId!,
         customerId: typeof customerId === 'string' ? customerId.trim() : undefined,
         type: typeof type === 'string' && ALLOWED_TYPES.has(type.toUpperCase()) ? type.toUpperCase() : undefined,
         limit: parsedLimit,
@@ -28,7 +30,7 @@ export class TransactionController {
     }
   }
 
-  static async create(req: Request, res: Response) {
+  static async create(req: AuthenticatedRequest, res: Response) {
     try {
       const { customerId, customerName, type, amount, note, items, paymentMethod } = req.body;
 
@@ -56,12 +58,12 @@ export class TransactionController {
       }
 
       // 5. Sanitize Strings & Items
-      // 5. Sanitize Strings & Items
       const sanitizedName = customerName ? String(customerName).trim().slice(0, 100) : undefined;
       const sanitizedNote = note ? String(note).trim().slice(0, 255) : undefined;
       const itemsJson = Array.isArray(items) ? JSON.stringify(items.slice(0, 50)) : undefined;
 
       const created = TransactionModel.create({
+        user_id: req.userId!,
         customer_id: customerId ? String(customerId).trim() : undefined,
         customer_name: sanitizedName,
         type: normalizedType,

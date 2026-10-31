@@ -5,7 +5,6 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { initDatabase } from './config/database';
 import apiRouter from './routes';
 import { HealthController } from './controllers/HealthController';

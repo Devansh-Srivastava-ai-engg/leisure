@@ -22,7 +22,11 @@ export class ResponseView {
 
   static error(res: Response, error: any, status = 500) {
     const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Internal Server Error';
-    return res.status(status).json({
+    const statusCode =
+      error && typeof error === 'object' && ('statusCode' in error || 'status' in error)
+        ? Number(error.statusCode || error.status) || status
+        : status;
+    return res.status(statusCode).json({
       success: false,
       error: message,
       timestamp: new Date().toISOString(),

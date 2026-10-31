@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import authRoutes from './authRoutes';
 import customerRoutes from './customerRoutes';
 import transactionRoutes from './transactionRoutes';
 import inventoryRoutes from './inventoryRoutes';
@@ -10,6 +11,7 @@ import healthRoutes from './healthRoutes';
 
 const apiRouter = Router();
 
+apiRouter.use('/auth', authRoutes);
 apiRouter.use('/customers', customerRoutes);
 apiRouter.use('/transactions', transactionRoutes);
 apiRouter.use('/inventory', inventoryRoutes);

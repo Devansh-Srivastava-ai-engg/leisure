@@ -7,8 +7,11 @@ import {
   CheckCircle2,
   AlertCircle,
   WifiOff,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useAuthStore } from '../store/authStore';
 import { getTranslation } from '../utils/i18n';
 import { syncOutboxNow } from '../db/operations';
 import { playSound } from '../utils/audio';
@@ -25,6 +28,8 @@ export const Header: React.FC = () => {
     pendingSyncCount,
     settings,
   } = useAppStore();
+
+  const { user, logout } = useAuthStore();
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState('');
@@ -147,6 +152,30 @@ export const Header: React.FC = () => {
           >
             {soundEnabled ? <Volume2 size={15} className="text-stone-800" /> : <VolumeX size={15} className="text-stone-400" />}
           </button>
+
+          {/* User Profile & Logout */}
+          {user && (
+            <div className="flex items-center gap-1.5 pl-1 border-l border-stone-200">
+              <span
+                className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-stone-700 bg-stone-100 rounded-md max-w-[120px] truncate"
+                title={`${user.name} (${user.email})`}
+              >
+                <UserCheck size={12} className="text-emerald-600 shrink-0" />
+                <span className="truncate">{user.name.split(' ')[0]}</span>
+              </span>
+              <button
+                onClick={() => {
+                  playSound('beep');
+                  logout();
+                }}
+                className="h-8 px-2 rounded-md flex items-center gap-1 text-rose-700 hover:text-rose-900 hover:bg-rose-50 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
+                title={language === 'hi' ? 'लॉगआउट करें (Sign Out)' : 'Log Out'}
+              >
+                <LogOut size={13} />
+                <span className="hidden md:inline">{language === 'hi' ? 'लॉगआउट' : 'Logout'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
