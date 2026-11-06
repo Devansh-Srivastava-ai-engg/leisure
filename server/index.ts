@@ -127,10 +127,11 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start the server
+// Start the server (only if not running under automated test runner)
 // ---------------------------------------------------------------------------
-const server = app.listen(PORT, () => {
-  console.log(`
+if (process.env.NODE_ENV !== 'test') {
+  const server = app.listen(PORT, () => {
+    console.log(`
 =====================================================
   🏪 DukaanKhata MVC Backend Server Online
   🚀 Port: ${PORT}
@@ -139,20 +140,22 @@ const server = app.listen(PORT, () => {
   ⚡ Sync:   http://localhost:${PORT}/api/sync
 =====================================================
 `);
-});
-
-// ---------------------------------------------------------------------------
-// Graceful shutdown on SIGINT / SIGTERM
-// ---------------------------------------------------------------------------
-const shutdown = (signal: string) => {
-  console.log(`\n[Backend] Received ${signal}. Shutting down gracefully…`);
-  server.close(() => {
-    console.log('[Backend] Server terminated gracefully.');
-    process.exit(0);
   });
-};
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+  // ---------------------------------------------------------------------------
+  // Graceful shutdown on SIGINT / SIGTERM
+  // ---------------------------------------------------------------------------
+  const shutdown = (signal: string) => {
+    console.log(`\n[Backend] Received ${signal}. Shutting down gracefully…`);
+    server.close(() => {
+      console.log('[Backend] Server terminated gracefully.');
+      process.exit(0);
+    });
+  };
 
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+export { app };
 export default app;
