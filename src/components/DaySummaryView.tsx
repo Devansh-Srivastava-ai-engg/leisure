@@ -18,14 +18,18 @@ import { useAppStore } from '../store/useAppStore';
 import { getTranslation } from '../utils/i18n';
 import { exportDatabaseToJson } from '../db/operations';
 import { playSound } from '../utils/audio';
+import type { Customer, Transaction } from '../types';
+
+const EMPTY_CUSTOMERS: Customer[] = [];
+const EMPTY_TRANSACTIONS: Transaction[] = [];
 
 export const DaySummaryView: React.FC = () => {
   const { language, settings } = useAppStore();
 
   const today = getTodayDateString();
   const register = useLiveQuery(() => db.dailyRegisters.get(today), [today]);
-  const customers = useLiveQuery(() => db.customers.toArray()) || [];
-  const transactions = useLiveQuery(() => db.transactions.toArray()) || [];
+  const customers = useLiveQuery(() => db.customers.toArray()) ?? EMPTY_CUSTOMERS;
+  const transactions = useLiveQuery(() => db.transactions.toArray()) ?? EMPTY_TRANSACTIONS;
 
   // Filter today's transactions
   const todayTransactions = useMemo(() => {

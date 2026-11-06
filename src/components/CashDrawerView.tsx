@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import confetti from 'canvas-confetti';
 import {
@@ -33,41 +33,33 @@ const NOTE_DENOMINATIONS: Array<{ key: keyof Denominations; value: number; label
   { key: 10, value: 10, label: '₹10', color: 'border-stone-200 bg-white text-stone-900' },
 ];
 
+const DEFAULT_DENOMS: Denominations = {
+  500: 0,
+  200: 0,
+  100: 0,
+  50: 0,
+  20: 0,
+  10: 0,
+  coins: 0,
+};
+
 export const CashDrawerView: React.FC = () => {
   const { language, soundEnabled } = useAppStore();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [denoms, setDenoms] = useState<Denominations>({
-    500: 0,
-    200: 0,
-    100: 0,
-    50: 0,
-    20: 0,
-    10: 0,
-    coins: 0,
-  });
+  const [denoms, setDenoms] = useState<Denominations>(DEFAULT_DENOMS);
   const [startingCash, setStartingCash] = useState<number>(2000);
   const [isClosingConfirm, setIsClosingConfirm] = useState(false);
 
   const today = getTodayDateString();
   const register = useLiveQuery(() => db.dailyRegisters.get(today), [today]);
+  const [prevRegister, setPrevRegister] = useState<DailyRegister | undefined>(undefined);
 
-  useEffect(() => {
-    if (register) {
-      setDenoms(
-        register.denominations || {
-          500: 0,
-          200: 0,
-          100: 0,
-          50: 0,
-          20: 0,
-          10: 0,
-          coins: 0,
-        }
-      );
-      setStartingCash(register.startingCash ?? 2000);
-    }
-  }, [register]);
+  if (register && register !== prevRegister) {
+    setPrevRegister(register);
+    setDenoms(register.denominations || DEFAULT_DENOMS);
+    setStartingCash(register.startingCash ?? 2000);
+  }
 
   // Handle note change
   const handleNoteChange = (key: keyof Denominations, count: number) => {

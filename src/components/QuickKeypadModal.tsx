@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Delete, ArrowUpRight, ArrowDownLeft, AlertTriangle } from 'lucide-react';
 import type { Customer } from '../types';
 import { useAppStore } from '../store/useAppStore';
@@ -13,29 +13,21 @@ interface QuickKeypadModalProps {
   onClose: () => void;
 }
 
-export const QuickKeypadModal: React.FC<QuickKeypadModalProps> = ({
+const QuickKeypadModalContent: React.FC<{
+  customer: Customer;
+  initialType: 'UDHAR_GIVEN' | 'JAMA_RECEIVED';
+  onClose: () => void;
+}> = ({
   customer,
-  initialType = 'UDHAR_GIVEN',
-  isOpen,
+  initialType,
   onClose,
 }) => {
   const { language, soundEnabled } = useAppStore();
 
   const [amountStr, setAmountStr] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<'UDHAR_GIVEN' | 'JAMA_RECEIVED'>(initialType);
+  const selectedType = initialType;
   const [note, setNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setAmountStr('');
-      setSelectedType(initialType);
-      setNote('');
-      setIsSubmitting(false);
-    }
-  }, [isOpen, initialType]);
-
-  if (!isOpen || !customer) return null;
 
   const currentAmount = parseFloat(amountStr) || 0;
 
@@ -291,5 +283,23 @@ export const QuickKeypadModal: React.FC<QuickKeypadModalProps> = ({
         </div>
       </div>
     </div>
+  );
+};
+
+export const QuickKeypadModal: React.FC<QuickKeypadModalProps> = ({
+  customer,
+  initialType = 'UDHAR_GIVEN',
+  isOpen,
+  onClose,
+}) => {
+  if (!isOpen || !customer) return null;
+
+  return (
+    <QuickKeypadModalContent
+      key={`${customer.id}-${initialType}`}
+      customer={customer}
+      initialType={initialType}
+      onClose={onClose}
+    />
   );
 };

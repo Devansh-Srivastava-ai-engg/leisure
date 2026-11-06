@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Check, X, Sparkles } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { parseVoiceInput } from '../utils/voiceParser';
@@ -13,37 +13,160 @@ interface IWindow extends Window {
   webkitSpeechRecognition?: any;
 }
 
-export const VoiceInputModal: React.FC = () => {
-  const { isVoiceModalOpen, closeVoiceModal, language, soundEnabled } = useAppStore();
+const isBrowserSpeechSupported = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const win = window as unknown as IWindow;
+  return Boolean(win.SpeechRecognition || win.webkitSpeechRecognition);
+};
+
+const SAMPLE_PHRASES = [
+  'शर्मा जी 30 रुपये उधार',
+  'रमेश 50 जमा',
+  'कोल्ड ड्रिंक 40 नकद',
+  'गुप्ता जी 120 उधार',
+  '2 कटिंग चाय 20 नकद',
+];
+
+const VoiceInputModalContent: React.FC = () => {
+  const { closeVoiceModal, language, soundEnabled } = useAppStore();
 
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [parsed, setParsed] = useState<ParsedVoiceResult | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [speechSupported, setSpeechSupported] = useState(true);
+  const [speechSupported] = useState(isBrowserSpeechSupported);
 
   const recognitionRef = useRef<any>(null);
   const countdownTimerRef = useRef<any>(null);
+  const commitVoiceTransactionRef = useRef<(result?: ParsedVoiceResult | null) => Promise<void>>(
+    () => Promise.resolve()
+  );
 
-  const samplePhrases = [
-    'शर्मा जी 30 रुपये उधार',
-    'रमेश 50 जमा',
-    'कोल्ड ड्रिंक 40 नकद',
-    'गुप्ता जी 120 उधार',
-    '2 कटिंग चाय 20 नकद',
-  ];
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch { }
+    }
+    setIsListening(false);
+  }, []);
+
+  const startListening = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+      setCountdown(null);
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+        recognitionRef.current.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+        recognitionRef.current.start();
+        playSound('beep');
+        triggerHaptic('tap');
+      } catch {
+        // Recognition error or already active
+      }
+    }
+  }, [language]);
+
+  const cancelCountdown = useCallback(() => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    setCountdown(null);
+    playSound('beep');
+  }, []);
+
+  const commitVoiceTransaction = useCallback(
+    async (resultToCommit = parsed) => {
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+      if (!resultToCommit || resultToCommit.amount <= 0) return;
+
+      try {
+        if (resultToCommit.type === 'CASH_SALE') {
+          // Record counter cash sale with the parsed amount
+          await recordCounterSale({
+            items: [
+              {
+                id: 'voice-quick-sale',
+                name: resultToCommit.note || 'Quick Voice Sale',
+                quantity: 1,
+                price: resultToCommit.amount,
+                unit: 'Piece',
+              } as any,
+            ],
+            paymentMethod: 'CASH',
+            lang: language,
+            soundEnabled,
+          });
+        } else {
+          // Find existing customer by normalized case-insensitive match
+          const searchName = resultToCommit.customerName.trim().toLowerCase();
+          const existing = await db.customers
+            .filter((c) => c.name.trim().toLowerCase() === searchName)
+            .first();
+
+          let customerId = existing?.id;
+          if (!customerId) {
+            const result = await saveCustomer({
+              name: resultToCommit.customerName.trim(),
+              balance: 0,
+              creditLimit: 500,
+              isPinned: false,
+            });
+            if (!result.success || !result.data) {
+              console.warn('Failed to create customer:', result.error);
+              return;
+            }
+            customerId = result.data.id;
+          }
+
+          await recordCustomerTransaction({
+            customerId,
+            type: resultToCommit.type === 'JAMA_RECEIVED' ? 'JAMA_RECEIVED' : 'UDHAR_GIVEN',
+            amount: resultToCommit.amount,
+            note: `Voice Entry: ${resultToCommit.rawText}`,
+            lang: language,
+            soundEnabled,
+          });
+        }
+
+        closeVoiceModal();
+      } catch (err) {
+        console.warn('Voice transaction commit failed:', err);
+      }
+    },
+    [parsed, language, soundEnabled, closeVoiceModal]
+  );
+
+  useEffect(() => {
+    commitVoiceTransactionRef.current = commitVoiceTransaction;
+  }, [commitVoiceTransaction]);
+
+  const startAutoConfirmTimer = useCallback((result: ParsedVoiceResult) => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    setCountdown(3);
+
+    let timeLeft = 3;
+    countdownTimerRef.current = setInterval(() => {
+      timeLeft -= 1;
+      setCountdown(timeLeft);
+      if (timeLeft <= 0) {
+        clearInterval(countdownTimerRef.current);
+        commitVoiceTransactionRef.current(result);
+      }
+    }, 1000);
+  }, []);
 
   useEffect(() => {
     const win = window as unknown as IWindow;
-    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
+    const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
+    if (!SpeechRecognitionClass) {
       return;
     }
 
     try {
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechRecognitionClass();
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
@@ -72,7 +195,6 @@ export const VoiceInputModal: React.FC = () => {
       recognitionRef.current = recognition;
     } catch (e) {
       console.warn('SpeechRecognition init error:', e);
-      setSpeechSupported(false);
     }
 
     return () => {
@@ -85,16 +207,12 @@ export const VoiceInputModal: React.FC = () => {
   }, [language]);
 
   useEffect(() => {
-    if (isVoiceModalOpen) {
-      setTranscript('');
-      setParsed(null);
-      setCountdown(null);
-      startListening();
-    } else {
+    startListening();
+    return () => {
       stopListening();
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    }
-  }, [isVoiceModalOpen]);
+    };
+  }, [startListening, stopListening]);
 
   useEffect(() => {
     if (!transcript.trim()) return;
@@ -108,122 +226,13 @@ export const VoiceInputModal: React.FC = () => {
         startAutoConfirmTimer(res);
       }
     });
-  }, [transcript]);
-
-  const startListening = () => {
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    setCountdown(null);
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-        recognitionRef.current.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
-        recognitionRef.current.start();
-        playSound('beep');
-        triggerHaptic('tap');
-      } catch {
-        setIsListening(true);
-      }
-    } else {
-      setIsListening(true);
-    }
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch { }
-    }
-    setIsListening(false);
-  };
-
-  const startAutoConfirmTimer = (result: ParsedVoiceResult) => {
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    setCountdown(3);
-
-    let timeLeft = 3;
-    countdownTimerRef.current = setInterval(() => {
-      timeLeft -= 1;
-      setCountdown(timeLeft);
-      if (timeLeft <= 0) {
-        clearInterval(countdownTimerRef.current);
-        commitVoiceTransaction(result);
-      }
-    }, 1000);
-  };
-
-  const cancelCountdown = () => {
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    setCountdown(null);
-    playSound('beep');
-  };
-
-  const commitVoiceTransaction = async (resultToCommit = parsed) => {
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    if (!resultToCommit || resultToCommit.amount <= 0) return;
-
-    try {
-      if (resultToCommit.type === 'CASH_SALE') {
-        // Record counter cash sale with the parsed amount
-        await recordCounterSale({
-          items: [
-            {
-              id: 'voice-quick-sale',
-              name: resultToCommit.note || 'Quick Voice Sale',
-              quantity: 1,
-              price: resultToCommit.amount,
-              unit: 'Piece',
-            } as any,
-          ],
-          paymentMethod: 'CASH',
-          lang: language,
-          soundEnabled,
-        });
-      } else {
-        // Find existing customer by normalized case-insensitive match
-        const searchName = resultToCommit.customerName.trim().toLowerCase();
-        const existing = await db.customers
-          .filter((c) => c.name.trim().toLowerCase() === searchName)
-          .first();
-
-        let customerId = existing?.id;
-        if (!customerId) {
-          const result = await saveCustomer({
-            name: resultToCommit.customerName.trim(),
-            balance: 0,
-            creditLimit: 500,
-            isPinned: false,
-          });
-          if (!result.success || !result.data) {
-            console.warn('Failed to create customer:', result.error);
-            return;
-          }
-          customerId = result.data.id;
-        }
-
-        await recordCustomerTransaction({
-          customerId,
-          type: resultToCommit.type === 'JAMA_RECEIVED' ? 'JAMA_RECEIVED' : 'UDHAR_GIVEN',
-          amount: resultToCommit.amount,
-          note: `Voice Entry: ${resultToCommit.rawText}`,
-          lang: language,
-          soundEnabled,
-        });
-      }
-
-      closeVoiceModal();
-    } catch (err) {
-      console.warn('Voice transaction commit failed:', err);
-    }
-  };
+  }, [transcript, startAutoConfirmTimer]);
 
   const handleTestPhrase = (phrase: string) => {
     stopListening();
     setTranscript(phrase);
     playSound('beep');
   };
-
-  if (!isVoiceModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-900/50 animate-fadeIn">
@@ -235,11 +244,16 @@ export const VoiceInputModal: React.FC = () => {
               <Mic size={18} className={isListening ? 'animate-pulse text-rose-700' : ''} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-stone-900">
-                {language === 'hi' ? 'बोलकर एंट्री करें (Voice-to-Ledger)' : 'Voice-to-Ledger Entry'}
+              <h2 className="text-sm font-bold text-stone-900 flex items-center gap-1.5">
+                <span>{getTranslation(language, 'voiceInputTitle')}</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">
+                  AI
+                </span>
               </h2>
-              <p className="text-xs text-stone-600">
-                {isListening ? getTranslation(language, 'voiceListening') : getTranslation(language, 'voiceHint')}
+              <p className="text-[11px] text-stone-500 font-medium">
+                {language === 'hi'
+                  ? 'बोलकर खाता, उधार या बिक्री दर्ज करें'
+                  : 'Speak customer, amount and udhar/jama'}
               </p>
             </div>
           </div>
@@ -247,82 +261,105 @@ export const VoiceInputModal: React.FC = () => {
             onClick={closeVoiceModal}
             className="w-8 h-8 rounded-md bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-700 transition-colors cursor-pointer"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Listening / Microphone Section */}
-        <div className="p-5 flex flex-col items-center justify-center text-center bg-stone-50 border-b border-stone-200">
-          <div className="my-2">
-            <button
-              onClick={isListening ? stopListening : startListening}
-              className={`w-20 h-20 rounded-full flex items-center justify-center text-white shadow-md transition-all cursor-pointer relative z-10 ${
-                isListening
-                  ? 'bg-rose-700 ring-4 ring-rose-200 animate-pulse'
-                  : 'bg-stone-200 hover:bg-stone-300 text-stone-700 ring-2 ring-stone-300'
+        {/* Unsupported Warning */}
+        {!speechSupported && (
+          <div className="p-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between">
+            <span>
+              ⚠️{' '}
+              {language === 'hi'
+                ? 'आपके ब्राउज़र में आवाज़ पहचान समर्थित नहीं है। नीचे दिए गए उदाहरणों पर टैप करें।'
+                : 'Speech recognition is not supported in this browser. Tap sample phrases below.'}
+            </span>
+          </div>
+        )}
+
+        {/* Mic Visualizer / Waveform Box */}
+        <div className="p-6 bg-stone-50 flex flex-col items-center justify-center border-b border-stone-200">
+          <button
+            onClick={isListening ? stopListening : startListening}
+            className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-md cursor-pointer ${
+              isListening
+                ? 'bg-rose-700 text-white ring-8 ring-rose-100 scale-105'
+                : 'bg-white border-2 border-stone-300 text-stone-700 hover:border-stone-400'
+            }`}
+          >
+            {isListening ? (
+              <Mic size={36} className="animate-pulse" />
+            ) : (
+              <MicOff size={32} className="text-stone-400" />
+            )}
+          </button>
+
+          <div className="mt-3 text-center">
+            <span
+              className={`text-xs font-bold uppercase tracking-wider ${
+                isListening ? 'text-rose-700' : 'text-stone-500'
               }`}
             >
-              {isListening ? <Mic size={36} className="text-white" /> : <MicOff size={32} className="text-stone-700" />}
-            </button>
+              {isListening
+                ? language === 'hi'
+                  ? 'सुन रहा हूँ... बोलिए'
+                  : 'Listening... speak now'
+                : language === 'hi'
+                  ? 'माइक दबाकर बोलें'
+                  : 'Tap mic to speak'}
+            </span>
           </div>
 
-          <p className="text-xs font-semibold text-stone-700 mt-2">
-            {!speechSupported
-              ? language === 'hi'
-                ? '⚠️ ब्राउज़र माइक समर्थित नहीं (नीचे दिए 1-टैप टेस्ट बोलियां इस्तेमाल करें)'
-                : '⚠️ Browser mic unsupported (Use 1-tap test chips below)'
-              : isListening
-                ? language === 'hi'
-                  ? 'माइक चालू है... बोलिए'
-                  : 'Listening... Speak phrase now'
-                : language === 'hi'
-                  ? 'बोलने के लिए माइक दबाएं'
-                  : 'Tap mic to speak'}
-          </p>
-
-          {/* Transcript Display Box */}
-          <div className="w-full mt-3 min-h-[50px] p-3 rounded-md bg-white border border-stone-300 text-stone-900 shadow-xs flex items-center justify-center font-medium text-sm">
+          {/* Realtime Transcript */}
+          <div className="mt-4 w-full min-h-[48px] p-3 rounded-md bg-white border border-stone-200 shadow-xs flex items-center justify-center text-center">
             {transcript ? (
-              <span className="text-emerald-800 font-mono font-bold">"{transcript}"</span>
+              <p className="text-sm font-semibold text-stone-900 leading-snug">
+                "{transcript}"
+              </p>
             ) : (
-              <span className="text-stone-400 italic text-xs">
+              <p className="text-xs text-stone-400 italic">
                 {language === 'hi'
-                  ? 'उदा: "शर्मा जी 30 रुपये उधार" या "रमेश 50 जमा"'
-                  : 'E.g.: "Sharma ji 30 udhar" or "Ramesh 50 jama"'}
-              </span>
+                  ? 'उदा: "रमेश 50 जमा" या "शर्मा जी 40 उधार"'
+                  : 'e.g. "Ramesh 50 jama" or "Sharma ji 40 udhar"'}
+              </p>
             )}
           </div>
         </div>
 
-        {/* 1-Tap Preset Voice Simulator Chips */}
-        <div className="px-4 py-2.5 bg-stone-100 border-b border-stone-200">
-          <div className="flex items-center gap-1.5 text-xs text-stone-600 font-semibold mb-1.5">
-            <Sparkles size={13} className="text-stone-700" />
-            <span>{language === 'hi' ? '1-टैप टेस्ट बोलियां (Simulator)' : 'Quick Test Phrases'}:</span>
+        {/* Quick Sample Chips */}
+        <div className="p-3 bg-white border-b border-stone-200">
+          <div className="text-[11px] font-bold text-stone-600 mb-2 uppercase tracking-wider flex items-center gap-1">
+            <Sparkles size={13} className="text-amber-600" />
+            <span>
+              {language === 'hi' ? 'बोलने के उदाहरण (टेस्ट करने के लिए दबाएं):' : 'Try saying:'}
+            </span>
           </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            {samplePhrases.map((phrase, idx) => (
+          <div className="flex flex-wrap gap-1.5">
+            {SAMPLE_PHRASES.map((phrase) => (
               <button
-                key={idx}
+                key={phrase}
                 onClick={() => handleTestPhrase(phrase)}
-                className="shrink-0 text-xs px-2.5 py-1.5 rounded-md bg-white hover:bg-stone-200 active:scale-95 border border-stone-300 text-stone-800 font-medium shadow-xs transition-colors cursor-pointer"
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 transition-colors cursor-pointer"
               >
-                {phrase}
+                "{phrase}"
               </button>
             ))}
           </div>
         </div>
 
-        {/* Parsed Extraction Result & 3-Second Auto-Confirm Bar */}
+        {/* Parsed Result Card (If Available) */}
         {parsed && parsed.amount > 0 && (
-          <div className="p-4 bg-white border-t border-stone-200 flex-1 flex flex-col justify-between">
-            <div className="bg-stone-50 rounded-md p-3.5 border border-stone-200 shadow-xs">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs uppercase font-bold tracking-wider text-stone-600">
-                  {getTranslation(language, 'voiceDetected')}
+          <div className="p-4 bg-emerald-50/60 border-t border-emerald-200 animate-slideUp">
+            <div className="p-3 bg-white rounded-lg border border-emerald-200 shadow-sm">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100">
+                <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                  <Check size={14} className="text-emerald-700 stroke-[3]" />
+                  <span>
+                    {language === 'hi' ? 'समझ आ गया (Parsed Result)' : 'Understood Entry'}
+                  </span>
                 </span>
-                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-stone-200 text-stone-800 border border-stone-300">
-                  {(parsed.confidence * 100).toFixed(0)}% {getTranslation(language, 'voiceConfidence')}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 font-mono">
+                  {(parsed.confidence * 100).toFixed(0)}% Match
                 </span>
               </div>
 
@@ -415,4 +452,10 @@ export const VoiceInputModal: React.FC = () => {
       </div>
     </div>
   );
+};
+
+export const VoiceInputModal: React.FC = () => {
+  const { isVoiceModalOpen } = useAppStore();
+  if (!isVoiceModalOpen) return null;
+  return <VoiceInputModalContent />;
 };

@@ -17,6 +17,8 @@ import { UpiQrModal } from './UpiQrModal';
 import { CustomerHistoryDrawer } from './CustomerHistoryDrawer';
 import { playSound, triggerHaptic } from '../utils/audio';
 
+const EMPTY_CUSTOMERS: Customer[] = [];
+
 export const LedgerView: React.FC = () => {
   const { language, openVoiceModal } = useAppStore();
 
@@ -35,7 +37,7 @@ export const LedgerView: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Live queries from Dexie
-  const customers = useLiveQuery(() => db.customers.toArray()) || [];
+  const customers = useLiveQuery(() => db.customers.toArray()) ?? EMPTY_CUSTOMERS;
 
   // Pinned Regulars
   const pinnedRegulars = useMemo(() => {
