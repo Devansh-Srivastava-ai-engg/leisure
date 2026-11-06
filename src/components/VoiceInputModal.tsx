@@ -245,7 +245,7 @@ const VoiceInputModalContent: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-bold text-stone-900 flex items-center gap-1.5">
-                <span>{getTranslation(language, 'voiceInputTitle')}</span>
+                <span>{getTranslation(language, 'voiceInputPrompt')}</span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">
                   AI
                 </span>

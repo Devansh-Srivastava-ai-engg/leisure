@@ -85,7 +85,7 @@ const CustomerModalForm: React.FC<Omit<CustomerModalProps, 'isOpen'>> = ({
           {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-1">
-              {getTranslation(language, 'name')} <span className="text-rose-600">*</span>
+              {getTranslation(language, 'customerName')} <span className="text-rose-600">*</span>
             </label>
             <input
               type="text"

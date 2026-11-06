@@ -14,7 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { db, getTodayDateString } from '../db/db';
-import type { Denominations } from '../types';
+import type { Denominations, DailyRegister } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { getTranslation } from '../utils/i18n';
 import {
