@@ -57,7 +57,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Update `render.yaml` with auto-generated `JWT_SECRET` and verify production build & startup
+- [ ] 03-01-PLAN.md — Auto-provision JWT_SECRET in render.yaml and verify clean production build & startup
 
 ## Progress
 
