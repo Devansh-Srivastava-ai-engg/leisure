@@ -9,9 +9,9 @@ Requirements for initial stabilization milestone. Each maps to roadmap phases.
 
 ### Testing & Verification
 
-- [ ] **TEST-01**: Developer can execute `npx vitest run` without running an external server process, and all API integration and security tests pass via an automated in-process test harness
-- [ ] **TEST-02**: Developer can run `npx vitest run` without Playwright E2E tests colliding with the Vitest test runner (isolated via `vitest.config.ts`)
-- [ ] **TEST-03**: Developer can run end-to-end browser tests independently via `npx playwright test`
+- [x] **TEST-01**: Developer can execute `npx vitest run` without running an external server process, and all API integration and security tests pass via an automated in-process test harness
+- [x] **TEST-02**: Developer can run `npx vitest run` without Playwright E2E tests colliding with the Vitest test runner (isolated via `vitest.config.ts`)
+- [x] **TEST-03**: Developer can run end-to-end browser tests independently via `npx playwright test`
 
 ### Code Quality & Linting
 
@@ -55,9 +55,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 1 | Pending |
-| TEST-02 | Phase 1 | Pending |
-| TEST-03 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
+| TEST-02 | Phase 1 | Complete |
+| TEST-03 | Phase 1 | Complete |
 | LINT-01 | Phase 2 | Pending |
 | LINT-02 | Phase 2 | Pending |
 | BUG-01 | Phase 2 | Pending |

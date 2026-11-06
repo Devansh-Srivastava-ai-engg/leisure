@@ -1,0 +1,28 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Test Harness & Runner Isolation",
+      "status": "pending"
+    },
+    {
+      "number": "2",
+      "name": "Code Quality & Sync Resilience",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Production Security & Cloud Deployment",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 1 of 3 · 0% · executing"
+  },
+  "updated_at": "2026-11-06T11:18:24.938Z"
+}

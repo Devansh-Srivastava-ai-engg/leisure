@@ -10,7 +10,7 @@ Stabilize and harden DukaanKhata across test execution, static analysis, code qu
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Test Harness & Runner Isolation** - Isolate Vitest from Playwright and automate integration test server lifecycle
+- [x] **Phase 1: Test Harness & Runner Isolation** - Isolate Vitest from Playwright and automate integration test server lifecycle
 - [ ] **Phase 2: Code Quality & Sync Resilience** - Eliminate Oxlint cascading render warnings and fix credit limit parsing
 - [ ] **Phase 3: Production Security & Cloud Deployment** - Auto-provision JWT secrets on Render and verify production builds
 
@@ -28,10 +28,10 @@ Stabilize and harden DukaanKhata across test execution, static analysis, code qu
 
 Plans:
 **Wave 1**
-- [ ] 01-01-PLAN.md — Configure Vitest to exclude Playwright E2E specs and isolate test runners
+- [x] 01-01-PLAN.md — Configure Vitest to exclude Playwright E2E specs and isolate test runners
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 01-02-PLAN.md — Implement in-process server test harness with supertest in API and security tests
+- [x] 01-02-PLAN.md — Implement in-process server test harness with supertest in API and security tests
 
 ### Phase 2: Code Quality & Sync Resilience
 **Goal**: Clean up React 19 / Oxlint state synchronization warnings (cascading renders in modals and `useMemo` reference stability) and fix customer credit limit conversion during sync operations.
@@ -66,6 +66,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Harness & Runner Isolation | 0/2 | Not started | - |
+| 1. Test Harness & Runner Isolation | 2/2 | Complete | 2026-11-06 |
 | 2. Code Quality & Sync Resilience | 0/2 | Not started | - |
 | 3. Production Security & Cloud Deployment | 0/1 | Not started | - |
