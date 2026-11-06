@@ -27,7 +27,10 @@ Stabilize and harden DukaanKhata across test execution, static analysis, code qu
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 01-01-PLAN.md — Configure Vitest to exclude Playwright E2E specs and isolate test runners
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — Implement in-process server test harness with supertest in API and security tests
 
 ### Phase 2: Code Quality & Sync Resilience
