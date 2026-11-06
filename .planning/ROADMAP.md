@@ -44,8 +44,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Fix credit limit numeric conversion logic in `src/db/operations.ts`
-- [ ] 02-02: Refactor state synchronization in modals and memoization in `LedgerView.tsx` / `VoiceInputModal.tsx`
+- [ ] 02-01-PLAN.md — Fix credit limit numeric conversion logic in src/db/operations.ts and add unit tests (BUG-01)
+- [ ] 02-02-PLAN.md — Refactor modal state initialization and liveQuery / callback memoization across views (LINT-01, LINT-02)
 
 ### Phase 3: Production Security & Cloud Deployment
 **Goal**: Auto-provision `JWT_SECRET` in `render.yaml` and verify that the production server build boots cleanly without runtime configuration exceptions.
