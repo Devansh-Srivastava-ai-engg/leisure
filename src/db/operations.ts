@@ -23,6 +23,12 @@ export interface OpResult<T = undefined> {
   error?: string;
 }
 
+export function parseCreditLimit(val: unknown, fallback = 500): number {
+  if (val === null || val === undefined) return fallback;
+  const num = typeof val === 'number' ? val : Number(val);
+  return Number.isFinite(num) && num > 0 ? num : fallback;
+}
+
 // ---------------------------------------------------------------------------
 // ID generation — collision-safe, backend-compatible UUIDs
 // ---------------------------------------------------------------------------
@@ -670,7 +676,7 @@ export async function pullFromServer(): Promise<{
       name: c.name,
       phone: c.phone || '',
       balance: Number(c.balance) || 0,
-      creditLimit: Number(c.credit_limit) ?? 500,
+      creditLimit: parseCreditLimit(c.credit_limit),
       isPinned: Boolean(c.is_pinned),
       avatarColor: c.avatar_color || 'bg-emerald-600',
       notes: c.notes || '',
