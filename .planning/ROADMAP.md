@@ -27,8 +27,8 @@ Stabilize and harden DukaanKhata across test execution, static analysis, code qu
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Create `vitest.config.ts` excluding `tests/e2e/**` from Vitest discovery
-- [ ] 01-02: Refactor integration and security tests to use supertest or an in-process ephemeral server harness
+- [ ] 01-01-PLAN.md — Configure Vitest to exclude Playwright E2E specs and isolate test runners
+- [ ] 01-02-PLAN.md — Implement in-process server test harness with supertest in API and security tests
 
 ### Phase 2: Code Quality & Sync Resilience
 **Goal**: Clean up React 19 / Oxlint state synchronization warnings (cascading renders in modals and `useMemo` reference stability) and fix customer credit limit conversion during sync operations.
