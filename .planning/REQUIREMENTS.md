@@ -15,9 +15,9 @@ Requirements for initial stabilization milestone. Each maps to roadmap phases.
 
 ### Code Quality & Linting
 
-- [ ] **LINT-01**: Oxlint linter (`npm run lint`) reports 0 warnings for synchronous `setState` in effects across all modals (`CustomerModal`, `QuickKeypadModal`, `CashDrawerView`, `VoiceInputModal`)
-- [ ] **LINT-02**: Oxlint linter reports 0 warnings for `useMemo` customer array reference instability and effect dependencies in `src/components/LedgerView.tsx` and `src/components/VoiceInputModal.tsx`
-- [ ] **BUG-01**: Credit limit conversion during server pull in `src/db/operations.ts` safely parses numeric values falling back to 500 instead of evaluating to `NaN`
+- [x] **LINT-01**: Oxlint linter (`npm run lint`) reports 0 warnings for synchronous `setState` in effects across all modals (`CustomerModal`, `QuickKeypadModal`, `CashDrawerView`, `VoiceInputModal`)
+- [x] **LINT-02**: Oxlint linter reports 0 warnings for `useMemo` customer array reference instability and effect dependencies in `src/components/LedgerView.tsx` and `src/components/VoiceInputModal.tsx`
+- [x] **BUG-01**: Credit limit conversion during server pull in `src/db/operations.ts` safely parses numeric values falling back to 500 instead of evaluating to `NaN`
 
 ### Security & Deployment
 
@@ -58,9 +58,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Complete |
-| LINT-01 | Phase 2 | Pending |
-| LINT-02 | Phase 2 | Pending |
-| BUG-01 | Phase 2 | Pending |
+| LINT-01 | Phase 2 | Complete |
+| LINT-02 | Phase 2 | Complete |
+| BUG-01 | Phase 2 | Complete |
 | SEC-01 | Phase 3 | Pending |
 | SEC-02 | Phase 3 | Pending |
 

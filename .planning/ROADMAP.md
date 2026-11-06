@@ -11,7 +11,7 @@ Stabilize and harden DukaanKhata across test execution, static analysis, code qu
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Test Harness & Runner Isolation** - Isolate Vitest from Playwright and automate integration test server lifecycle
-- [ ] **Phase 2: Code Quality & Sync Resilience** - Eliminate Oxlint cascading render warnings and fix credit limit parsing
+- [x] **Phase 2: Code Quality & Sync Resilience** - Eliminate Oxlint cascading render warnings and fix credit limit parsing
 - [ ] **Phase 3: Production Security & Cloud Deployment** - Auto-provision JWT secrets on Render and verify production builds
 
 ## Phase Details
@@ -44,8 +44,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Fix credit limit numeric conversion logic in src/db/operations.ts and add unit tests (BUG-01)
-- [ ] 02-02-PLAN.md — Refactor modal state initialization and liveQuery / callback memoization across views (LINT-01, LINT-02)
+- [x] 02-01-PLAN.md — Fix credit limit numeric conversion logic in src/db/operations.ts and add unit tests (BUG-01)
+- [x] 02-02-PLAN.md — Refactor modal state initialization and liveQuery / callback memoization across views (LINT-01, LINT-02)
 
 ### Phase 3: Production Security & Cloud Deployment
 **Goal**: Auto-provision `JWT_SECRET` in `render.yaml` and verify that the production server build boots cleanly without runtime configuration exceptions.
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Harness & Runner Isolation | 2/2 | Complete | 2026-11-06 |
-| 2. Code Quality & Sync Resilience | 0/2 | Not started | - |
+| 2. Code Quality & Sync Resilience | 2/2 | Complete | 2026-11-06 |
 | 3. Production Security & Cloud Deployment | 0/1 | Not started | - |
