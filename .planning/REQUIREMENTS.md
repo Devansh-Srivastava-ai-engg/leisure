@@ -21,8 +21,8 @@ Requirements for initial stabilization milestone. Each maps to roadmap phases.
 
 ### Security & Deployment
 
-- [ ] **SEC-01**: `render.yaml` configuration auto-generates `JWT_SECRET` on deployment to prevent fatal server startup crashes in production mode
-- [ ] **SEC-02**: Server boots cleanly in production without missing secret errors and serves static PWA assets reliably
+- [x] **SEC-01**: `render.yaml` configuration auto-generates `JWT_SECRET` on deployment to prevent fatal server startup crashes in production mode
+- [x] **SEC-02**: Server boots cleanly in production without missing secret errors and serves static PWA assets reliably
 
 ## v2 Requirements
 
@@ -61,8 +61,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LINT-01 | Phase 2 | Complete |
 | LINT-02 | Phase 2 | Complete |
 | BUG-01 | Phase 2 | Complete |
-| SEC-01 | Phase 3 | Pending |
-| SEC-02 | Phase 3 | Pending |
+| SEC-01 | Phase 3 | Complete |
+| SEC-02 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 8 total
